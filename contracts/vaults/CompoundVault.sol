@@ -64,6 +64,9 @@ abstract contract AbstractCompoundVault is IVotingVault {
     /// @notice emitted on vote power change
     event VoteChange(address indexed from, address indexed to, int256 amount);
 
+    /// @notice emitted on TWAR multiplier change
+    event MultiplierChanged(uint256 oldMultiplier, uint256 newMultiplier);
+
     /**
      * @notice constructor that sets the immutables
      * @param _underlying the underlying governance token
@@ -254,7 +257,10 @@ abstract contract AbstractCompoundVault is IVotingVault {
         // if the borrow rate is extremeley (close to 100%) for a prolonged period of time
         // we prevent a revert in this extreme edge case via the ternary expression below
         uint256 newMultiplier = (10**18 - weightedAnnualBorrowRate) > 0 ? (10**18 - weightedAnnualBorrowRate) : 0;
+        uint256 oldMultiplier = Storage.uint256Ptr(TWAR_MULTIPLIER).data;
         Storage.set(Storage.uint256Ptr(TWAR_MULTIPLIER), newMultiplier);
+
+        emit MultiplierChanged(oldMultiplier, newMultiplier);
 
         // Finally, let's update the LAST_UPDATED_AT storage var
         Storage.set(Storage.uint256Ptr(LAST_UPDATED_AT), block.timestamp);
