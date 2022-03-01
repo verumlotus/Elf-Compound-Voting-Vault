@@ -27,11 +27,6 @@ abstract contract AbstractCompoundVault is IVotingVault {
     /// uint256 twarIndex - current index in twarSnapshots which we will update/overwrite next
     /// uint256 weightedBorrowRate - the TWAR borrow rate, scaled to an annual rate (3% annual rate = 0.03*10^18)
 
-    struct twarSnapshot {
-        uint256 cumulativeRate; // cumulative rate of borrow rate at time of struct creation
-        uint256 timestamp; // timestamp this struct was created
-    }
-
     /************************************************
      *  IMMUTABLES & CONSTANTS
      ***********************************************/
@@ -183,7 +178,6 @@ abstract contract AbstractCompoundVault is IVotingVault {
 
         // Ok, now let's weight the underlyingAmount according to the TWAR
         // TODO: Need to create our own custom storage similar to VestingVaultStorage
-        Storage.
 
     }
 
