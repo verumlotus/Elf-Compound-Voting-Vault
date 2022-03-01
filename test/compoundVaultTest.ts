@@ -31,7 +31,7 @@ describe("Compound Vault", function () {
             "MockERC20",
             signers[0]
         );
-        underlying = await erc20Deployer.deploy("Ele", "test ele", signers[0].address);
+        underlying = await erc20Deployer.deploy("Ele test", "Ele", signers[0].address);
 
         // deploy the cToken token;
         const cTokenDeployer = await ethers.getContractFactory(
@@ -39,6 +39,13 @@ describe("Compound Vault", function () {
             signers[0]
         );
         cToken = await cTokenDeployer.deploy("cEle", "cEle test", signers[0].address, underlying.address);
+
+        // deploy a comptroller
+        const comptrollerDeployer = await ethers.getContractFactory(
+            "MockComptroller", 
+            signers[0]
+        );
+        comptroller = await comptrollerDeployer.deploy();
 
         // deploy the contract
         const deployer = await ethers.getContractFactory(
@@ -57,5 +64,53 @@ describe("Compound Vault", function () {
             );
         }
     });
+
+  // After we reset our state in the fork
+  after(async () => {
+    await restoreSnapshot(provider);
+  });
+  // Before each we snapshot
+  beforeEach(async () => {
+    await createSnapshot(provider);
+  });
+  // After we reset our state in the fork
+  afterEach(async () => {
+    await restoreSnapshot(provider);
+  });
+
+  describe("Deposit Sequence", async () => {
+    beforeEach(async () => {
+      await createSnapshot(provider);
+    });
+    // After we reset our state in the fork
+    afterEach(async () => {
+      await restoreSnapshot(provider);
+    });
+    // Test the deposit by user for user
+    it("Allows a user's first deposit to set gov power", async () => {
+      // Before each we snapshot
+      // Deposit by calling from address 0 and delegating to address 1
+      const tx = await (
+        await vault.deposit(signers[0].address, one, signers[1].address)
+      ).wait();
+      const votingPower = await vault.queryVotePowerView(
+        signers[1].address,
+        tx.blockNumber
+      );
+      expect(votingPower).to.be.eq(one);
+      // expect user 0 to have a deposits
+      let userData = await vault.deposits(signers[0].address);
+      expect(userData[0]).to.be.eq(signers[1].address);
+      expect(userData[1]).to.be.eq(one);
+      // expect address 1/2 to have zero deposit
+      userData = await vault.deposits(signers[1].address);
+      expect(userData[0]).to.be.eq(zeroAddress);
+      expect(userData[1]).to.be.eq(0);
+      userData = await vault.deposits(signers[2].address);
+      expect(userData[0]).to.be.eq(zeroAddress);
+      expect(userData[1]).to.be.eq(0);
+    });
+  });
+    
 });
 

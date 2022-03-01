@@ -353,8 +353,17 @@ abstract contract AbstractCompoundVault is IVotingVault {
 
         // Now let's update our current twarMultiplier
         // If we don't have maxLength # of snapshots in our array, just default to 0 
-        uint256 subtractIndex = (twarSnapshots.length == twarSnapshotsMaxLength) ? ((newTwarIndex + 1) % twarSnapshots.length) : 0;
-        CompoundVaultStorage.twarSnapshot memory subtractSnapshot = twarSnapshots[subtractIndex];
+        CompoundVaultStorage.twarSnapshot memory subtractSnapshot;
+
+        if (twarSnapshots.length == twarSnapshotsMaxLength) {
+            subtractSnapshot = twarSnapshots[(newTwarIndex + 1) % twarSnapshots.length];
+        } else if (twarSnapshots.length == 1) {
+            // We have only one snapshot, so let's use the dummy snapshot
+            subtractSnapshot = lastSnapshot;
+        } else {
+            // Else, we have 1 < x < Max length number of snapshots, and take snapshot at index 0 to be our subtract snapshot
+            subtractSnapshot = twarSnapshots[0];
+        }
 
         // The borrow rate is given per block, so let's multiply by blocks per year to get the projected annual borrow rate
         uint256 weightedAnnualBorrowRate = (newSnapshot.cumulativeRate - subtractSnapshot.cumulativeRate) / (newSnapshot.timestamp - subtractSnapshot.timestamp)
