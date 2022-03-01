@@ -259,6 +259,37 @@ abstract contract AbstractCompoundVault is IVotingVault {
     }
 
     /**
+     * @notice Changes a user's historical cToken balance (and thus voting power)
+     * @param newDelegate the new address which gets delegated the cToken balance
+     */
+    function changeDelegation(address newDelegate) external {
+        // Get the stored user data
+        Storage.AddressUint storage userData = _deposits()[msg.sender];
+        // Get the user balance
+        uint256 userBalance = uint256(userData.amount);
+        address oldDelegate = userData.who;
+        // Reset the user delegation
+        userData.who = newDelegate;
+
+        // calculate current effect on vote change
+        uint256 voteChangeEffect = _calculateCTokenVotingPower(userBalance);
+
+        // Reduce the delegate historical cToken balance
+        // Get the storage pointer
+        History.HistoricalBalances memory cTokenBalances = _cTokenBalances();
+        // Load the most recent cTokens stamp
+        uint256 delegateeCTokens = cTokenBalances.loadTop(delegate);
+        cTokenBalances.push(delegate, delegateeCTokens - userBalance);
+        emit VoteChange(msg.sender, delegate, -1 * voteChangeEffect);
+
+        // Get the new delegate's votes
+        uint256 newDelegateCTokens = cTokenBalances.loadTop(newDelegate);
+        // Store increase in delegated cToken balance
+        cTokenBalances.push(newDelegate, newDelegateCTokens + userBalance);
+        emit VoteChange(msg.sender, newDelegate, voteChangeEffect);
+    }
+
+    /**
      * @notice Uses the time weighted borrow rate to calculate the voting power of the given number of cTokens
      * @param numCTokens the number of cTokens
      * @return the voting power of this number of cTokens at the current block
