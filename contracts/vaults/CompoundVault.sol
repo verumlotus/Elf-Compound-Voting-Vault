@@ -169,10 +169,9 @@ abstract contract AbstractCompoundVault is IVotingVault {
     /**
      * @notice Uses the time weighted borrow rate to calculate the voting power of the given number of cTokens
      * @param numCTokens the number of cTokens
-     * @return the voting power weightage of this number of cTokens at this specific block
+     * @return the voting power of this number of cTokens at this specific block
      */
     function _calculateCTokenVotingPower(uint256 numCTokens) internal returns (uint256) {
-        /// TODO
         // First let's see how much of the underlying numCTokens is worth
         // exchangeRate is scaled by 10^(10 + underlying.decimals()) so we need to divide that out at the end
         // see https://compound.finance/docs/ctokens#exchange-rate
