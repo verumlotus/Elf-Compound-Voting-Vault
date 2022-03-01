@@ -166,7 +166,6 @@ abstract contract AbstractCompoundVault is IVotingVault {
      */
     function queryVotePowerView(address user, uint256 blockNumber)
         external
-        view
         returns (uint256)
     {
         // Get our reference to historical data
@@ -226,7 +225,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
         // Add the newly deposited cTokens to the delegate
         cTokenBalances.push(delegate, delegateeCTokens + cTokensMinted);
         // Emit event for vote change
-        emit VoteChange(fundedAccount, delegate, _calculateCTokenVotingPower(cTokensMinted));
+        emit VoteChange(fundedAccount, delegate, int256(_calculateCTokenVotingPower(cTokensMinted)));
     }
 
     /**
@@ -249,7 +248,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
         uint256 delegateeCTokens = cTokenBalances.loadTop(delegate);
         // remove withdrawn cTokens from the delegate
         cTokenBalances.push(delegate, delegateeCTokens - amount);
-        emit VoteChange(msg.sender, delegate, -1 * _calculateCTokenVotingPower(amount));
+        emit VoteChange(msg.sender, delegate, -1 * int256(_calculateCTokenVotingPower(amount)));
 
         // Now let's withdraw our cTokens, convert them to underlying, and send them to msg.sender
         uint256 balanceBefore = underlying.balanceOf(address(this));
@@ -272,15 +271,15 @@ abstract contract AbstractCompoundVault is IVotingVault {
         userData.who = newDelegate;
 
         // calculate current effect on vote change
-        uint256 voteChangeEffect = _calculateCTokenVotingPower(userBalance);
+        int256 voteChangeEffect = int256(_calculateCTokenVotingPower(userBalance));
 
         // Reduce the delegate historical cToken balance
         // Get the storage pointer
         History.HistoricalBalances memory cTokenBalances = _cTokenBalances();
         // Load the most recent cTokens stamp
-        uint256 delegateeCTokens = cTokenBalances.loadTop(delegate);
-        cTokenBalances.push(delegate, delegateeCTokens - userBalance);
-        emit VoteChange(msg.sender, delegate, -1 * voteChangeEffect);
+        uint256 delegateeCTokens = cTokenBalances.loadTop(oldDelegate);
+        cTokenBalances.push(oldDelegate, delegateeCTokens - userBalance);
+        emit VoteChange(msg.sender, oldDelegate, -1 * voteChangeEffect);
 
         // Get the new delegate's votes
         uint256 newDelegateCTokens = cTokenBalances.loadTop(newDelegate);
@@ -327,7 +326,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
         }
         
         // Now let's construct our new snapshot 
-        uint256 elapsedTime = block.timestamp - lastSnapshot;
+        uint256 elapsedTime = block.timestamp - lastSnapshot.timestamp;
         // Let's query for the current cToken borrow rate
         uint256 currBorrowRate = cToken.borrowRatePerBlock();
         uint256 newCumulativeRate = lastSnapshot.cumulativeRate + (currBorrowRate * elapsedTime);
