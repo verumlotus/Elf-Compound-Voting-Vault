@@ -374,3 +374,25 @@ abstract contract AbstractCompoundVault is IVotingVault {
         Storage.set(Storage.uint256Ptr(LAST_UPDATED_AT), block.timestamp);
     }
 }
+
+contract CompoundVault is AbstractCompoundVault {
+    /**
+     * @notice constructor that sets the immutables
+     * @param _underlying the underlying governance token
+     * @param _cToken the cToken of the governance token
+     * @param comptroller the address of the Compound Comptroller
+     * @param _period the minimum delay period between sampling the borrow rate
+     * @param _staleBlockLag stale block lag in units of blocks
+     * @param _twarSnapshotsMaxLength the max length of the twarSnapshots array
+     */
+    constructor(
+        IERC20 _underlying,
+        ICToken _cToken,
+        IComptroller comptroller,
+        uint256 _period,
+        uint256 _staleBlockLag,
+        uint256 _twarSnapshotsMaxLength
+    ) AbstractCompoundVault(_underlying, _cToken, comptroller, _period, _staleBlockLag, _twarSnapshotsMaxLength)
+    // prettier-ignore
+    {}
+}
