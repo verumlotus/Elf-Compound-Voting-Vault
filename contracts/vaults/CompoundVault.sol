@@ -242,7 +242,6 @@ abstract contract AbstractCompoundVault is IVotingVault {
         }
 
         // Now let's update our current twarMultiplier
-        uint256 lastUpdatedIndex = newTwarIndex;
         // If we don't have maxLength # of snapshots in our array, just default to 0 
         uint256 subtractIndex = (twarSnapshots.length == twarSnapshotsMaxLength) ? ((newTwarIndex + 1) % twarSnapshots.length) : 0;
         CompoundVaultStorage.twarSnapshot memory subtractSnapshot = twarSnapshots[subtractIndex];
