@@ -230,10 +230,32 @@ abstract contract AbstractCompoundVault is IVotingVault {
     }
 
     /**
-     * @notice Removes underlying from compound and transfers to user, subtracting appropriate amount of votes
+     * @notice Removes cTokens from compound, converts them to underlying and transfers to user
+     * @param amount The amount of cTokens to withdraw
      */
     function withdraw(uint256 amount) external {
+        // Load our deposits storage
+        Storage.AddressUint storage userData = _deposits()[msg.sender];
 
+        // Reduce the user's stored balance
+        // If properly optimized this block should result in 1 sload 1 store
+        userData.amount -= uint96(amount);
+        address delegate = userData.who;
+
+        // Reduce the delegate historical cToken balance
+        // Get the storage pointer
+        History.HistoricalBalances memory cTokenBalances = _cTokenBalances();
+        // Load the most recent cTokens stamp
+        uint256 delegateeCTokens = cTokenBalances.loadTop(delegate);
+        // remove withdrawn cTokens from the delegate
+        cTokenBalances.push(delegate, delegateeCTokens - amount);
+        emit VoteChange(msg.sender, delegate, -1 * _calculateCTokenVotingPower(amount));
+
+        // Now let's withdraw our cTokens, convert them to underlying, and send them to msg.sender
+        uint256 balanceBefore = underlying.balanceOf(address(this));
+        require(cToken.redeem(amount) == 0, "Error redeeming cTokens");
+        uint256 underlyingRedeemed = underlying.balanceOf(address(this)) - balanceBefore;
+        underlying.transfer(msg.sender, underlyingRedeemed);
     }
 
     /**
