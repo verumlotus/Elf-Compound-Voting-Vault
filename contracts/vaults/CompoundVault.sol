@@ -25,7 +25,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
     /// (uint256) lastUpdatedAt - timestamp when our TWAR was last updated
     string public constant LAST_UPDATED_AT = "lastUpdatedAt";
 
-    /// twarSnapshot[] twarSnapshots - array of twapSnapshots
+    /// twarSnapshot[] twarSnapshots - array of twarSnapshots
     string public constant TWAR_SNAPSHOTS = "twarSnapshots";
 
     /// (uint256) twarIndex - current index in twarSnapshots which we will update/overwrite next
@@ -53,6 +53,9 @@ abstract contract AbstractCompoundVault is IVotingVault {
 
     /// @notice the max length of the twarSnapshots array
     uint256 public immutable twarSnapshotsMaxLength;
+
+    /// @notice number of blocks per year, based on avg block time of 14 seconds
+    uint256 public constant BLOCKS_PER_YEAR = 2252857;
 
     /************************************************
      *  EVENTS & MODIFIERS
@@ -93,7 +96,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
     }
 
     /************************************************
-     *  SHARES LOGIC
+     *  VAULT LOGIC
      ***********************************************/
 
     /**
@@ -128,7 +131,11 @@ abstract contract AbstractCompoundVault is IVotingVault {
      * @dev requires that user has already called approve() on this contract for specified amount or more
      */
     function deposit(address fundedAccount, uint256 amount, address firstDelegation) external {
-        /// TODO: TWAP logic (check if we can update it)
+        // Check if we need to update our TWAR
+        if ((block.timestamp - Storage.uint256Ptr(LAST_UPDATED_AT).data) > period) {
+            _updateTwar();
+        }
+
         // No delegating to zero
         require(firstDelegation != address(0), "Zero addr delegation");
         // transfer underlying to this address
@@ -188,4 +195,66 @@ abstract contract AbstractCompoundVault is IVotingVault {
         return (underlyingAmount * twarMultiplier) / (10**18);
     }
 
+    /**
+     * @notice updates the TWAR state (twarSnapshots, twarIndex, twarMultiplier, etc.)
+     */
+    function _updateTwar() internal {
+        // Let's fetch the most recent twarSnapshot created
+        CompoundVaultStorage.twarSnapshot[] storage twarSnapshots = CompoundVaultStorage.arrayPtr(TWAR_SNAPSHOTS);
+        CompoundVaultStorage.twarSnapshot memory lastSnapshot;
+        uint256 twarIndex = Storage.uint256Ptr(TWAR_INDEX).data;
+        if (twarSnapshots.length > 0) {
+            // grab the last snapshot
+            lastSnapshot = twarSnapshots[twarIndex];
+        } else {
+            // This means that we have never added to the twarArray
+            // Let's construct a dummy twarSnapshot struct in this case
+            lastSnapshot = CompoundVaultStorage.twarSnapshot(
+                0, // set cumulative rate to 0 
+                block.timestamp - period // set the last timestamp to be 'period' seconds in the past
+            );
+        }
+        
+        // Now let's construct our new snapshot 
+        uint256 elapsedTime = block.timestamp - lastSnapshot;
+        // Let's query for the current cToken borrow rate
+        uint256 currBorrowRate = cToken.borrowRatePerBlock();
+        uint256 newCumulativeRate = lastSnapshot.cumulativeRate + (currBorrowRate * elapsedTime);
+
+        CompoundVaultStorage.twarSnapshot memory newSnapshot = CompoundVaultStorage.twarSnapshot(
+            newCumulativeRate,
+            block.timestamp
+        );
+
+        // Let's figure out where we should place this new snapshot (increment, wrap around, or expand array)
+        uint256 newTwarIndex;
+        if (twarSnapshots.length < twarSnapshotsMaxLength) {
+            // We should expand in the array in this case
+            twarSnapshots.push(newSnapshot);
+            newTwarIndex = twarSnapshots.length - 1;
+            Storage.set(Storage.uint256Ptr(TWAR_INDEX), newTwarIndex);
+        } else {
+            // in this case our array is the max size, and we simply need to increment the index, possibly wrapping around
+            // to the beginning of the array
+            newTwarIndex = (twarIndex + 1) % twarSnapshots.length;
+            Storage.set(Storage.uint256Ptr(TWAR_INDEX), newTwarIndex);
+            twarSnapshots[newTwarIndex] = newSnapshot;
+        }
+
+        // Now let's update our current twarMultiplier
+        uint256 lastUpdatedIndex = newTwarIndex;
+        // If we don't have maxLength # of snapshots in our array, just default to 0 
+        uint256 subtractIndex = (twarSnapshots.length == twarSnapshotsMaxLength) ? ((newTwarIndex + 1) % twarSnapshots.length) : 0;
+        CompoundVaultStorage.twarSnapshot memory subtractSnapshot = twarSnapshots[subtractIndex];
+
+        // The borrow rate is given per block, so let's multiply by blocks per year to get the projected annual borrow rate
+        uint256 weightedAnnualBorrowRate = (newSnapshot.cumulativeRate - subtractSnapshot.cumulativeRate) / (newSnapshot.timestamp - subtractSnapshot.timestamp)
+            * BLOCKS_PER_YEAR;
+
+        // Because of annual borrow rate is an estimate there is a (very unlikely) chance that the first subtraction expression is negative
+        // if the borrow rate is extremeley (close to 100%) for a prolonged period of time
+        // we prevent a revert in this extreme edge case via the ternary expression below
+        uint256 newMultiplier = (10**18 - weightedAnnualBorrowRate) > 0 ? (10**18 - weightedAnnualBorrowRate) : 0;
+        Storage.set(Storage.uint256Ptr(TWAR_MULTIPLIER), newMultiplier);
+    }
 }
