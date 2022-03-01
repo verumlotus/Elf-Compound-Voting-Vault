@@ -127,17 +127,17 @@ abstract contract AbstractCompoundVault is IVotingVault {
     }
 
     /**
-     * @notice Returns the historical voting power tracker
+     * @notice Returns the historical cToken balances tracker
      * @return A struct which can push to and find items in block indexed storage
      */
-    function _votingPower()
+    function _cTokenBalances()
         internal
         pure
         returns (History.HistoricalBalances memory)
     {
         // This call returns a storage mapping with a unique non overwrite-able storage location
         // which can be persisted through upgrades, even if they change storage layout
-        return (History.load("votingPower"));
+        return (History.load("cTokenBalances"));
     }
 
     /**
@@ -152,14 +152,10 @@ abstract contract AbstractCompoundVault is IVotingVault {
         bytes calldata
     ) external override returns (uint256) {
         // Get our reference to historical data
-        History.HistoricalBalances memory votingPower = _votingPower();
+        History.HistoricalBalances memory cTokenBalances = _cTokenBalances();
         // Find the historical data and clear everything more than 'staleBlockLag' into the past
-        return
-            votingPower.findAndClear(
-                user,
-                blockNumber,
-                block.number - staleBlockLag
-            );
+        uint256 cTokenBalance = cTokenBalances.findAndClear(user, blockNumber, block.number - staleBlockLag);
+        return _calculateCTokenVotingPower(cTokenBalance);
     }
 
     /**
@@ -174,9 +170,10 @@ abstract contract AbstractCompoundVault is IVotingVault {
         returns (uint256)
     {
         // Get our reference to historical data
-        History.HistoricalBalances memory votingPower = _votingPower();
+        History.HistoricalBalances memory cTokenBalances = _cTokenBalances();
         // Find the historical datum
-        return votingPower.find(user, blockNumber);
+        uint256 cTokenBalance = cTokenBalances.find(user, blockNumber);
+        return _calculateCTokenVotingPower(cTokenBalance);
     }
 
     /**
@@ -222,16 +219,21 @@ abstract contract AbstractCompoundVault is IVotingVault {
 
         // Next we increase the delegation to their delegate
         // Get the storage pointer
-        History.HistoricalBalances memory votingPower = _votingPower();
-        // Load the most recent voter power stamp
-        uint256 delegateeVotes = votingPower.loadTop(delegate);
+        History.HistoricalBalances memory cTokenBalances = _cTokenBalances();
+        // Load the most recent cTokens stamp
+        uint256 delegateeCTokens = cTokenBalances.loadTop(delegate);
 
-        // Let's calculate the voting power of the minted cTokens
-        uint256 weightedVotingPower = _calculateCTokenVotingPower(cTokensMinted);
-        // Add the newly deposited votes to the delegate
-        votingPower.push(delegate, delegateeVotes + weightedVotingPower);
+        // Add the newly deposited cTokens to the delegate
+        cTokenBalances.push(delegate, delegateeCTokens + cTokensMinted);
         // Emit event for vote change
-        emit VoteChange(fundedAccount, delegate, weightedVotingPower);
+        emit VoteChange(fundedAccount, delegate, _calculateCTokenVotingPower(cTokensMinted));
+    }
+
+    /**
+     * @notice Removes underlying from compound and transfers to user, subtracting appropriate amount of votes
+     */
+    function withdraw(uint256 amount) external {
+
     }
 
     /**
