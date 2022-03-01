@@ -7,6 +7,7 @@ import "../interfaces/IERC20.sol";
 import "../interfaces/ICToken.sol";
 import "../interfaces/IComptroller.sol";
 import "../interfaces/IVotingVault.sol";
+import "../libraries/CompoundVaultStorage.sol";
 
 abstract contract AbstractCompoundVault is IVotingVault {
     // bring in libraries
@@ -25,7 +26,8 @@ abstract contract AbstractCompoundVault is IVotingVault {
     /// uint256 lastUpdatedAt - timestamp when our TWAR was last updated
     /// twarSnapshot[] twarSnapshots - array of twapSnapshots
     /// uint256 twarIndex - current index in twarSnapshots which we will update/overwrite next
-    /// uint256 weightedBorrowRate - the TWAR borrow rate, scaled to an annual rate (3% annual rate = 0.03*10^18)
+    /// uint256 twarMultiplier - the latest multiplier to use per unit of underlying, scaled by a factor of 10^18
+    /// e.g a multiplier of 0.97 would be represented as 0.97 * 10^18
 
     /************************************************
      *  IMMUTABLES & CONSTANTS
@@ -177,8 +179,8 @@ abstract contract AbstractCompoundVault is IVotingVault {
         uint256 underlyingAmount = (numCTokens * cToken.exchangeRateCurrent()) / (10 ** (10 + underlying.decimals()));
 
         // Ok, now let's weight the underlyingAmount according to the TWAR
-        // TODO: Need to create our own custom storage similar to VestingVaultStorage
-
+        uint256 twarMultiplier = Storage.uint256Ptr("twarMultiplier").data;
+        return (underlyingAmount * twarMultiplier) / (10**18);
     }
 
 }
