@@ -11,7 +11,7 @@ library CompoundVaultStorage {
     /**
      * @notice returns storage pointer for an array with the given name
      * @param name name of the array
-     * @return 
+     * @return data the array pointer
      */
     function arrayPtr(string memory name) internal pure returns(twarSnapshot[] storage data) {
         bytes32 typehash = keccak256("twarSnapshot[]");

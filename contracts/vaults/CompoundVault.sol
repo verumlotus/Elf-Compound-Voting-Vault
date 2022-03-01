@@ -15,19 +15,25 @@ abstract contract AbstractCompoundVault is IVotingVault {
     using Storage for *;
 
     /************************************************
-     *  STORAGE & STRUCTS
+     *  STORAGE UTILITIES
      ***********************************************/
     /// Note: We utilize the Storage.sol library to avoid storage collisions
-    /// Thus there are no storage variables in this contract, but we will list some of them 
-    /// out for clarity's sake. 
-
+    /// Thus there are no storage variables in this contract directly, but we will list some of the used storage 
+    /// variables out for clarity's sake. 
     /// Note: "TWAR" stands for Time Weighted Average (Borrow) Rate and functions similar to a TWAP
 
-    /// uint256 lastUpdatedAt - timestamp when our TWAR was last updated
+    /// (uint256) lastUpdatedAt - timestamp when our TWAR was last updated
+    string public constant LAST_UPDATED_AT = "lastUpdatedAt";
+
     /// twarSnapshot[] twarSnapshots - array of twapSnapshots
-    /// uint256 twarIndex - current index in twarSnapshots which we will update/overwrite next
-    /// uint256 twarMultiplier - the latest multiplier to use per unit of underlying, scaled by a factor of 10^18
+    string public constant TWAR_SNAPSHOTS = "twarSnapshots";
+
+    /// (uint256) twarIndex - current index in twarSnapshots which we will update/overwrite next
+    string public constant TWAR_INDEX = "twarIndex";
+
+    // (uint256) - latest multiplier to use per unit of underlying, scaled by a factor of 10^18
     /// e.g a multiplier of 0.97 would be represented as 0.97 * 10^18
+    string public constant TWAR_MULTIPLIER = "twarMultiplier";
 
     /************************************************
      *  IMMUTABLES & CONSTANTS
@@ -123,7 +129,6 @@ abstract contract AbstractCompoundVault is IVotingVault {
      */
     function deposit(address fundedAccount, uint256 amount, address firstDelegation) external {
         /// TODO: TWAP logic (check if we can update it)
-            here
         // No delegating to zero
         require(firstDelegation != address(0), "Zero addr delegation");
         // transfer underlying to this address
@@ -163,7 +168,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
         // Add the newly deposited votes to the delegate
         votingPower.push(delegate, delegateeVotes + weightedVotingPower);
         // Emit event for vote change
-        emit VoteChange(fundedAccount, delegate, weightedVotingPower)
+        emit VoteChange(fundedAccount, delegate, weightedVotingPower);
     }
 
     /**
@@ -178,7 +183,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
         uint256 underlyingAmount = (numCTokens * cToken.exchangeRateCurrent()) / (10 ** (10 + cToken.decimals()));
 
         // Ok, now let's weight the underlyingAmount according to the TWAR
-        uint256 twarMultiplier = Storage.uint256Ptr("twarMultiplier").data;
+        uint256 twarMultiplier = Storage.uint256Ptr(TWAR_MULTIPLIER).data;
         // TWAR is scaled by a factor of 10^18, so let's divide that out 
         return (underlyingAmount * twarMultiplier) / (10**18);
     }

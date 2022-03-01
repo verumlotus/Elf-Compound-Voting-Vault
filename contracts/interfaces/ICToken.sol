@@ -8,5 +8,5 @@ interface ICToken is IERC20 {
     function redeemUnderlying(uint redeemAmount) external returns (uint);
     function exchangeRateCurrent() external returns (uint);
     function borrowRatePerBlock() external returns (uint);
-    function balanceOfUnderlying(address account) external returns (uint)
+    function balanceOfUnderlying(address account) external returns (uint);
 }
