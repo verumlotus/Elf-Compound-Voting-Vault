@@ -127,6 +127,59 @@ abstract contract AbstractCompoundVault is IVotingVault {
     }
 
     /**
+     * @notice Returns the historical voting power tracker
+     * @return A struct which can push to and find items in block indexed storage
+     */
+    function _votingPower()
+        internal
+        pure
+        returns (History.HistoricalBalances memory)
+    {
+        // This call returns a storage mapping with a unique non overwrite-able storage location
+        // which can be persisted through upgrades, even if they change storage layout
+        return (History.load("votingPower"));
+    }
+
+    /**
+     * @notice Attempts to load the voting power of a user
+     * @param user The address we want to load the voting power of
+     * @param blockNumber the block number we want the user's voting power at
+     * @return the number of votes
+     */
+    function queryVotePower(
+        address user, 
+        uint256 blockNumber, 
+        bytes calldata
+    ) external override returns (uint256) {
+        // Get our reference to historical data
+        History.HistoricalBalances memory votingPower = _votingPower();
+        // Find the historical data and clear everything more than 'staleBlockLag' into the past
+        return
+            votingPower.findAndClear(
+                user,
+                blockNumber,
+                block.number - staleBlockLag
+            );
+    }
+
+    /**
+     * @notice Loads the voting power of a user without changing state
+     * @param user The address we want to load the voting power of
+     * @param blockNumber the block number we want the user's voting power at
+     * @return the number of votes
+     */
+    function queryVotePowerView(address user, uint256 blockNumber)
+        external
+        view
+        returns (uint256)
+    {
+        // Get our reference to historical data
+        History.HistoricalBalances memory votingPower = _votingPower();
+        // Find the historical datum
+        return votingPower.find(user, blockNumber);
+    }
+
+    /**
      * @notice Deposits underlying amount in Compound and delegates voting power to firstDelegation
      * @param fundedAccount the address to credit this deposit to
      * @param amount The amount in underlying to deposit to compound
