@@ -255,5 +255,8 @@ abstract contract AbstractCompoundVault is IVotingVault {
         // we prevent a revert in this extreme edge case via the ternary expression below
         uint256 newMultiplier = (10**18 - weightedAnnualBorrowRate) > 0 ? (10**18 - weightedAnnualBorrowRate) : 0;
         Storage.set(Storage.uint256Ptr(TWAR_MULTIPLIER), newMultiplier);
+
+        // Finally, let's update the LAST_UPDATED_AT storage var
+        Storage.set(Storage.uint256Ptr(LAST_UPDATED_AT), block.timestamp);
     }
 }
