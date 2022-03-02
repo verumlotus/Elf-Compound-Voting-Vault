@@ -21,9 +21,24 @@ describe("Compound Vault", function () {
     let signers: SignerWithAddress[];
     const one = ethers.utils.parseEther("1");
     const zeroAddress = "0x0000000000000000000000000000000000000000";
+    // margin of error for checking retur values
+    // set to 0.01% due to solidity vs JS math differences
+    const marginOfError = 10000;
     // 1 cToken is worth 0.5 underlying
     const cTokenToUnderlyingRate = 0.5;
     const underlyingToCTokenRate = 2;
+
+    const calcVotePowerFromUnderlying = (underlyingAmount: BigNumber) => {
+      const twarMultiplier = ethers.utils.parseEther("0.9");
+      return underlyingAmount.mul(twarMultiplier).div(one);
+    };
+
+    const assertBigNumberWithinRange = (actualVal: BigNumber, expectedVal: BigNumber) => {
+      const upperBound: BigNumber = expectedVal.add(expectedVal.div(marginOfError));
+      const lowerBound: BigNumber = expectedVal.sub(expectedVal.div(marginOfError));
+      expect(actualVal).to.be.lte(upperBound);
+      expect(actualVal).to.be.gte(lowerBound);
+    }
 
     before(async function() {
         // Create a before snapshot
@@ -100,7 +115,8 @@ describe("Compound Vault", function () {
         signers[1].address,
         tx.blockNumber
       );
-      expect(votingPower).to.be.eq(BigNumber.from("900000000000061635"));
+      const expectedVotingPower = calcVotePowerFromUnderlying(one);
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
       // expect user 0 to have a deposits
       let userData = await vault.deposits(signers[0].address);
       expect(userData[0]).to.be.eq(signers[1].address);
