@@ -21,6 +21,9 @@ describe("Compound Vault", function () {
     let signers: SignerWithAddress[];
     const one = ethers.utils.parseEther("1");
     const zeroAddress = "0x0000000000000000000000000000000000000000";
+    // 1 cToken is worth 0.5 underlying
+    const cTokenToUnderlyingRate = 0.5;
+    const underlyingToCTokenRate = 2;
 
     before(async function() {
         // Create a before snapshot
@@ -93,15 +96,15 @@ describe("Compound Vault", function () {
       const tx = await (
         await vault.deposit(signers[0].address, one, signers[1].address)
       ).wait();
-      const votingPower = await vault.queryVotePowerView(
+      const votingPower = await vault.callStatic.queryVotePowerView(
         signers[1].address,
         tx.blockNumber
       );
-      expect(votingPower).to.be.eq(one);
+      expect(votingPower).to.be.eq(BigNumber.from("900000000000061635"));
       // expect user 0 to have a deposits
       let userData = await vault.deposits(signers[0].address);
       expect(userData[0]).to.be.eq(signers[1].address);
-      expect(userData[1]).to.be.eq(one);
+      expect(userData[1]).to.be.eq(one.mul(underlyingToCTokenRate));
       // expect address 1/2 to have zero deposit
       userData = await vault.deposits(signers[1].address);
       expect(userData[0]).to.be.eq(zeroAddress);
