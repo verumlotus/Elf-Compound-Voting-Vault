@@ -104,6 +104,7 @@ describe("Compound Vault", function () {
     afterEach(async () => {
       await restoreSnapshot(provider);
     });
+
     // Test the deposit by user for user
     it("Allows a user's first deposit to set gov power", async () => {
       // Before each we snapshot
@@ -129,7 +130,75 @@ describe("Compound Vault", function () {
       expect(userData[0]).to.be.eq(zeroAddress);
       expect(userData[1]).to.be.eq(0);
     });
-  });
-    
+
+    it("Allows a user's first deposit to set their own power", async () => {
+      // Deposit by calling from address 0 and delegating to address 1
+      const tx = await (
+        await vault.deposit(signers[0].address, one, signers[0].address)
+      ).wait();
+      const votingPower = await vault.callStatic.queryVotePowerView(
+        signers[0].address,
+        tx.blockNumber
+      );
+      const expectedVotingPower = calcVotePowerFromUnderlying(one);
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+    });
+
+    // Test the deposit by user not for user
+    it("Allows someone else to add voting power on behalf of user", async () => {
+      // Deposit by calling from address 2 to fund address 0 and delegate to address 1
+      const tx = await (
+        await vault
+          .connect(signers[2])
+          .deposit(signers[0].address, one, signers[1].address)
+      ).wait();
+      // expect address 1 to have voting power
+      const votingPower = await vault.callStatic.queryVotePowerView(
+        signers[1].address,
+        tx.blockNumber
+      );
+      const expectedVotingPower = calcVotePowerFromUnderlying(one);
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+      // expect address 0 to have a deposit
+      let userData = await vault.deposits(signers[0].address);
+      expect(userData[0]).to.be.eq(signers[1].address);
+      expect(userData[1]).to.be.eq(one.mul(underlyingToCTokenRate));
+      // expect address 1/2 to have zero deposit
+      userData = await vault.deposits(signers[1].address);
+      expect(userData[0]).to.be.eq(zeroAddress);
+      expect(userData[1]).to.be.eq(0);
+      userData = await vault.deposits(signers[2].address);
+      expect(userData[0]).to.be.eq(zeroAddress);
+      expect(userData[1]).to.be.eq(0);
+    });
+
+    // Test deposit after user has already deposited once
+    it("Does not let second deposit change the delegation", async () => {
+      await vault.deposit(signers[0].address, one, signers[0].address);
+      const tx = await (
+        await vault
+          .connect(signers[1])
+          .deposit(signers[0].address, one, signers[1].address)
+      ).wait();
+      // expect address 1 to have voting power
+      const votingPower = await vault.callStatic.queryVotePowerView(
+        signers[0].address,
+        tx.blockNumber
+      );
+      const expectedVotingPower = calcVotePowerFromUnderlying(one.mul(2));
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+      // expect address 0 to have a deposit
+      let userData = await vault.deposits(signers[0].address);
+      expect(userData[0]).to.be.eq(signers[0].address);
+      expect(userData[1]).to.be.eq(one.mul(2).mul(underlyingToCTokenRate));
+      // expect address 1/2 to have zero deposit
+      userData = await vault.deposits(signers[1].address);
+      expect(userData[0]).to.be.eq(zeroAddress);
+      expect(userData[1]).to.be.eq(0);
+      userData = await vault.deposits(signers[2].address);
+      expect(userData[0]).to.be.eq(zeroAddress);
+      expect(userData[1]).to.be.eq(0);
+    });
+  });  
 });
 
