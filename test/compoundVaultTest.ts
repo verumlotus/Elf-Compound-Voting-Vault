@@ -29,8 +29,8 @@ describe("Compound Vault", function () {
     const underlyingToCTokenRate = 2;
     const TWAR_MULTIPLIER = "twarMultiplier";
 
-    const calcVotePowerFromUnderlying = (underlyingAmount: BigNumber) => {
-      const twarMultiplier = ethers.utils.parseEther("0.9");
+    const calcVotePowerFromUnderlying = (underlyingAmount: BigNumber, multiplier = "0.9") => {
+      const twarMultiplier = ethers.utils.parseEther(multiplier);
       return underlyingAmount.mul(twarMultiplier).div(one);
     };
 
@@ -330,6 +330,34 @@ describe("Compound Vault", function () {
       assertBigNumberWithinRange(votingPower, expectedVotingPower);
     });
 
+    it("TWAR Multiplier scales voting power correctly", async () => {
+      // Deposit by calling from address 0 and delegating to address 0
+      const tx = await (
+        await vault.deposit(signers[0].address, one, signers[0].address)
+      ).wait();
+      let votingPower = await vault.callStatic.queryVotePowerView(
+        signers[0].address,
+        tx.blockNumber
+      );
+      let expectedVotingPower = calcVotePowerFromUnderlying(one);
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+      const twarMultiplierStorageSlot = calculateStorageSlot("uint256", TWAR_MULTIPLIER);
+      console.log(twarMultiplierStorageSlot);
+      const twarMultiplierValue: string = await network.provider.send("eth_getStorageAt", [vault.address, twarMultiplierStorageSlot, "latest"],);
+      console.log("The multiplier value is: %s", twarMultiplierValue);
+      // It should be 0.9 in the beginning
+      assertBigNumberWithinRange(BigNumber.from(twarMultiplierValue), one.mul(9).div(10));
+
+      // set multiplier to 0.8
+      const newMultiplier = one.mul(8).div(10);
+      await network.provider.send("hardhat_setStorageAt", [vault.address, twarMultiplierStorageSlot, newMultiplier]);
+      votingPower = await vault.callStatic.queryVotePowerView(
+        signers[0].address,
+        tx.blockNumber
+      );
+      expectedVotingPower = calcVotePowerFromUnderlying(one, "0.8");
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+    });
   });
 });
 
