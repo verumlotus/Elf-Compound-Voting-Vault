@@ -28,6 +28,10 @@ describe("Compound Vault", function () {
     const cTokenToUnderlyingRate = 0.5;
     const underlyingToCTokenRate = 2;
     const TWAR_MULTIPLIER = "twarMultiplier";
+    const borrowRatePerBlock = 44388081445;
+    const secondsPerDay = 86400;
+    const MAX_TWAR_SNAPSHOTS_LENGTH = 30;
+    const BLOCKS_PER_YEAR = 2252857;
 
     const calcVotePowerFromUnderlying = (underlyingAmount: BigNumber, multiplier = "0.9") => {
       const twarMultiplier = ethers.utils.parseEther(multiplier);
@@ -45,6 +49,49 @@ describe("Compound Vault", function () {
     const calculateStorageSlot = (type: string, name: string) => {
       const typeHash: string = ethers.utils.solidityKeccak256(["string"], [type]);
       return ethers.utils.solidityKeccak256(["bytes", "string"], [typeHash, name]);
+    }
+
+    interface Scenario {
+      borrowRate: BigNumber, // borrow rate in annual terms, scaled by 10^18 (so 0.05 would be 0.05 * 10 ^18)
+      timestamp: number
+    }
+
+    interface TwarSnapshot {
+      cumulativeRate: BigNumber, 
+      timestamp: number
+    }
+
+    const simulateAndCalculateTwarMultiplier = (scenarios: Scenario[]): BigNumber => {
+      // We assume only one deposit has happened, and thus we start with the dummy snapshot
+      let prevSnapshot: TwarSnapshot = {
+        cumulativeRate: BigNumber.from(borrowRatePerBlock * secondsPerDay),
+        timestamp: 0 + secondsPerDay
+      }
+
+      const snapshots: TwarSnapshot[] = [];
+      snapshots.push(prevSnapshot);
+
+      for (const scenario of scenarios) {
+        const elapsedTime = scenario.timestamp - prevSnapshot.timestamp;
+        const newCumulativeRate = prevSnapshot.cumulativeRate.add(scenario.borrowRate.mul(elapsedTime));
+        prevSnapshot = {
+          cumulativeRate: newCumulativeRate, 
+          timestamp: scenario.timestamp
+        }
+        snapshots.push(prevSnapshot);
+      }
+
+      // Ok now let's find the weightedBorrowRate
+      const subtractIndex: number = Math.max(scenarios.length - MAX_TWAR_SNAPSHOTS_LENGTH, 0);
+      const subtractSnapshot: TwarSnapshot = snapshots[subtractIndex];
+      const mostRecentSnapshot: TwarSnapshot = snapshots[snapshots.length - 1];
+
+      const weightedAnnualBorrowRate: BigNumber = ((mostRecentSnapshot.cumulativeRate.sub(subtractSnapshot.cumulativeRate))
+        .div((mostRecentSnapshot.timestamp - subtractSnapshot.timestamp)))
+        .mul(BLOCKS_PER_YEAR)
+
+      const multiplier = one.sub(weightedAnnualBorrowRate);
+      return multiplier;      
     }
 
     before(async function() {
