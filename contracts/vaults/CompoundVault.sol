@@ -184,7 +184,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
      */
     function deposit(address fundedAccount, uint256 amount, address firstDelegation) external {
         // Check if we need to update our TWAR
-        if ((block.timestamp - Storage.uint256Ptr(LAST_UPDATED_AT).data) > period) {
+        if ((block.timestamp - Storage.uint256Ptr(LAST_UPDATED_AT).data) >= period) {
             _updateTwar();
         }
 

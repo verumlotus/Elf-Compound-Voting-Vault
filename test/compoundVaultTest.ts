@@ -27,6 +27,7 @@ describe("Compound Vault", function () {
     // 1 cToken is worth 0.5 underlying
     const cTokenToUnderlyingRate = 0.5;
     const underlyingToCTokenRate = 2;
+    const TWAR_MULTIPLIER = "twarMultiplier";
 
     const calcVotePowerFromUnderlying = (underlyingAmount: BigNumber) => {
       const twarMultiplier = ethers.utils.parseEther("0.9");
@@ -38,6 +39,12 @@ describe("Compound Vault", function () {
       const lowerBound: BigNumber = expectedVal.sub(expectedVal.div(marginOfError));
       expect(actualVal).to.be.lte(upperBound);
       expect(actualVal).to.be.gte(lowerBound);
+    }
+
+    // Mimics Storage.sol and allows us to find the storage slot of a storage variable
+    const calculateStorageSlot = (type: string, name: string) => {
+      const typeHash: string = ethers.utils.solidityKeccak256(["string"], [type]);
+      return ethers.utils.solidityKeccak256(["bytes", "string"], [typeHash, name]);
     }
 
     before(async function() {
@@ -285,6 +292,44 @@ describe("Compound Vault", function () {
     votingPower = await vault.callStatic.queryVotePowerView(signers[2].address, block);
     expectedVotingPower = calcVotePowerFromUnderlying(one.mul(2).add(one.div(2)));
     assertBigNumberWithinRange(votingPower, expectedVotingPower);
+  });
+
+  describe("TWAR updates", async () => {
+    beforeEach(async () => {
+      await createSnapshot(provider);
+    });
+    // After we reset our state in the fork
+    afterEach(async () => {
+      await restoreSnapshot(provider);
+    });
+
+    it("Calculates TWAR correctly if borrow remains same & updated in equi-distant timestamps", async () => {
+      // Deposit by calling from address 0 and delegating to address 0
+      const tx = await (
+        await vault.deposit(signers[0].address, one, signers[0].address)
+      ).wait();
+      let votingPower = await vault.callStatic.queryVotePowerView(
+        signers[0].address,
+        tx.blockNumber
+      );
+      let  expectedVotingPower = calcVotePowerFromUnderlying(one);
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+      
+      // Let's try increasing the timestamp by 24 hours (86400 seconds) 30 times
+      for (let i = 0; i < 30; i++) {
+        await network.provider.send("evm_increaseTime", [86400]);
+        // Deposit of 0, dummy tx to just trigger an update of the TWAR
+        const tx = await (
+          await vault.deposit(signers[0].address, 0, signers[0].address)
+        ).wait();
+      }
+
+      const block = await network.provider.send("eth_blockNumber");
+      votingPower = await vault.callStatic.queryVotePowerView(signers[0].address, block);
+      expectedVotingPower = calcVotePowerFromUnderlying(one);
+      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+    });
+
   });
 });
 
