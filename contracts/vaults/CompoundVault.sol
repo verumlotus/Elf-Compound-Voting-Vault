@@ -18,17 +18,17 @@ abstract contract AbstractCompoundVault is IVotingVault {
      *  STORAGE UTILITIES
      ***********************************************/
     /// Note: We utilize the Storage.sol library to avoid storage collisions
-    /// Thus there are no storage variables in this contract directly, but we will list some of the used storage 
-    /// variables out for clarity's sake. 
+    /// Thus there are no storage variables in this contract directly. 
     /// Note: "TWAR" stands for Time Weighted Average (Borrow) Rate and functions similar to a TWAP
 
+    /// Names we use for querying for Storage variables via Storage.sol
     /// (uint256) lastUpdatedAt - timestamp when our TWAR was last updated
     string public constant LAST_UPDATED_AT = "lastUpdatedAt";
 
-    /// twarSnapshot[] twarSnapshots - array of twarSnapshots
+    /// twarSnapshot[] twarSnapshots - array of twarSnapshot structs
     string public constant TWAR_SNAPSHOTS = "twarSnapshots";
 
-    /// (uint256) twarIndex - current index in twarSnapshots which we will update/overwrite next
+    /// (uint256) twarIndex - current index in twarSnapshots which we will us to find the next index to overwrite
     string public constant TWAR_INDEX = "twarIndex";
 
     // (uint256) - latest multiplier to use per unit of underlying, scaled by a factor of 10^18
