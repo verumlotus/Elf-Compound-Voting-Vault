@@ -199,46 +199,92 @@ describe("Compound Vault", function () {
       expect(userData[0]).to.be.eq(zeroAddress);
       expect(userData[1]).to.be.eq(0);
     });
-
-    it("Changes delegates properly", async () => {
-      // First we setup the user and give accounts some voting power
-      await vault.deposit(signers[0].address, one, signers[0].address);
-      await vault
-        .connect(signers[1])
-        .deposit(signers[1].address, one.div(2), signers[0].address);
-      await vault
-        .connect(signers[2])
-        .deposit(signers[2].address, one.mul(2), signers[2].address);
-      // singer 0 has deposit 1 voting power 1.5, singer 1 has deposit 0.5 voting power 0, singer 2 has
-      // deposit 2 voting power 2
-      // we now change delegates
-      const tx = await (await vault.changeDelegation(signers[2].address)).wait();
-      // Check on all the deposits and delegations
-      let userData = await vault.deposits(signers[0].address);
-      expect(userData[0]).to.be.eq(signers[2].address);
-      expect(userData[1]).to.be.eq(one.mul(underlyingToCTokenRate));
-  
-      userData = await vault.deposits(signers[1].address);
-      expect(userData[0]).to.be.eq(signers[0].address);
-      expect(userData[1]).to.be.eq(one.div(2).mul(underlyingToCTokenRate));
-  
-      userData = await vault.deposits(signers[2].address);
-      expect(userData[0]).to.be.eq(signers[2].address);
-      expect(userData[1]).to.be.eq(one.mul(2).mul(underlyingToCTokenRate));
-  
-      // check the voting power
-      const block = tx.blockNumber;
-      let votingPower = await vault.callStatic.queryVotePowerView(signers[0].address, block);
-      let expectedVotingPower = calcVotePowerFromUnderlying(one.div(2));
-      assertBigNumberWithinRange(votingPower, expectedVotingPower);
-      // The call to this query voting power method will fail on a length 0 array
-      await expect(
-        vault.queryVotePowerView(signers[1].address, block)
-      ).to.be.revertedWith("uninitialized");
-      votingPower = await vault.callStatic.queryVotePowerView(signers[2].address, block);
-      expectedVotingPower = calcVotePowerFromUnderlying(one.mul(3));
-      assertBigNumberWithinRange(votingPower, expectedVotingPower);
-    });
   });  
+
+  it("Changes delegates properly", async () => {
+    // First we setup the user and give accounts some voting power
+    await vault.deposit(signers[0].address, one, signers[0].address);
+    await vault
+      .connect(signers[1])
+      .deposit(signers[1].address, one.div(2), signers[0].address);
+    await vault
+      .connect(signers[2])
+      .deposit(signers[2].address, one.mul(2), signers[2].address);
+    // singer 0 has deposit 1 voting power 1.5, singer 1 has deposit 0.5 voting power 0, singer 2 has
+    // deposit 2 voting power 2
+    // we now change delegates
+    const tx = await (await vault.changeDelegation(signers[2].address)).wait();
+    // Check on all the deposits and delegations
+    let userData = await vault.deposits(signers[0].address);
+    expect(userData[0]).to.be.eq(signers[2].address);
+    expect(userData[1]).to.be.eq(one.mul(underlyingToCTokenRate));
+
+    userData = await vault.deposits(signers[1].address);
+    expect(userData[0]).to.be.eq(signers[0].address);
+    expect(userData[1]).to.be.eq(one.div(2).mul(underlyingToCTokenRate));
+
+    userData = await vault.deposits(signers[2].address);
+    expect(userData[0]).to.be.eq(signers[2].address);
+    expect(userData[1]).to.be.eq(one.mul(2).mul(underlyingToCTokenRate));
+
+    // check the voting power
+    const block = tx.blockNumber;
+    let votingPower = await vault.callStatic.queryVotePowerView(signers[0].address, block);
+    let expectedVotingPower = calcVotePowerFromUnderlying(one.div(2));
+    assertBigNumberWithinRange(votingPower, expectedVotingPower);
+    // The call to this query voting power method will fail on a length 0 array
+    await expect(
+      vault.queryVotePowerView(signers[1].address, block)
+    ).to.be.revertedWith("uninitialized");
+    votingPower = await vault.callStatic.queryVotePowerView(signers[2].address, block);
+    expectedVotingPower = calcVotePowerFromUnderlying(one.mul(3));
+    assertBigNumberWithinRange(votingPower, expectedVotingPower);
+  });
+
+  it("Withdraws properly", async () => {
+    // First we setup the user and give accounts some voting power
+    await vault.deposit(signers[0].address, one, signers[2].address);
+    await vault
+      .connect(signers[1])
+      .deposit(signers[1].address, one.div(2), signers[0].address);
+    await vault
+      .connect(signers[2])
+      .deposit(signers[2].address, one.mul(2), signers[2].address);
+    // We withdraw from user one and check the accounts
+    const balanceBefore = await underlying.balanceOf(signers[0].address);
+    const tx = await (await vault.withdraw(one.div(2).mul(underlyingToCTokenRate))).wait();
+    // We check that the user has increased balance
+    const balanceAfter = await underlying.balanceOf(signers[0].address);
+    expect(balanceAfter.sub(balanceBefore)).to.be.eq(one.div(2));
+    // We now check all of the user vault and voting power
+    // Check on all the deposits and delegations
+    let userData = await vault.deposits(signers[0].address);
+    expect(userData[0]).to.be.eq(signers[2].address);
+    expect(userData[1]).to.be.eq(one.div(2).mul(underlyingToCTokenRate));
+
+    userData = await vault.deposits(signers[1].address);
+    expect(userData[0]).to.be.eq(signers[0].address);
+    expect(userData[1]).to.be.eq(one.div(2).mul(underlyingToCTokenRate));
+
+    userData = await vault.deposits(signers[2].address);
+    expect(userData[0]).to.be.eq(signers[2].address);
+    expect(userData[1]).to.be.eq(one.mul(2).mul(underlyingToCTokenRate));
+
+    // check the voting power
+    const block = tx.blockNumber;
+    let votingPower = await vault.callStatic.queryVotePowerView(signers[0].address, block);
+    let expectedVotingPower = calcVotePowerFromUnderlying(one.div(2));
+    assertBigNumberWithinRange(votingPower, expectedVotingPower);
+    const queryTx = await (
+      await vault.queryVotePower(signers[0].address, block, "0x")
+    ).wait();
+    // The call to this query voting power method will fail on a length 0 array
+    await expect(
+      vault.queryVotePowerView(signers[1].address, block)
+    ).to.be.revertedWith("uninitialized");
+    votingPower = await vault.callStatic.queryVotePowerView(signers[2].address, block);
+    expectedVotingPower = calcVotePowerFromUnderlying(one.mul(2).add(one.div(2)));
+    assertBigNumberWithinRange(votingPower, expectedVotingPower);
+  });
 });
 
