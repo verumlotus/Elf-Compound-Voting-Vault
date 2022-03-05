@@ -8,6 +8,7 @@ contract MockCToken is ICToken, MockERC20 {
     // MockERC20 has 18 decimal places
     // Assume 2 cTokens are equivalent to 1 underlying
     uint256 public exchangeRate = 5 * 10 ** (10 + 18 - 1);
+    uint256 public borrowRate = 44388081445;
 
     address public underlying;
 
@@ -24,10 +25,14 @@ contract MockCToken is ICToken, MockERC20 {
         return balanceOf[account] * exchangeRate / (10**28);
     }
 
-    function borrowRatePerBlock() external pure override returns (uint) {
+    function borrowRatePerBlock() external view override returns (uint) {
         // Let's say we want 10% annual borrow rate
         // This is (0.1 * 10^18) / (num blocks a year)
-        return 44388081445;
+        return borrowRate;
+    }
+
+    function setBorrowRate(uint256 value) external {
+        borrowRate = value;
     }
 
     function exchangeRateCurrent() external view override returns (uint) {

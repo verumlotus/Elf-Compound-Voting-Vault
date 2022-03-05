@@ -22,14 +22,14 @@ describe("Compound Vault", function () {
     const one = ethers.utils.parseEther("1");
     const zeroAddress = "0x0000000000000000000000000000000000000000";
     // margin of error for checking retur values
-    // set to 0.01% due to solidity vs JS math differences
-    const marginOfError = 10000;
+    // set to 0.01% to allow for minor rounding differences
+    const MARGIN_OF_ERROR = 1000;
     // 1 cToken is worth 0.5 underlying
     const cTokenToUnderlyingRate = 0.5;
     const underlyingToCTokenRate = 2;
     const TWAR_MULTIPLIER = "twarMultiplier";
-    const borrowRatePerBlock = 44388081445;
-    const secondsPerDay = 86400;
+    const BORROW_RATE_PER_BLOCK = 44388081445;
+    const SECONDS_PER_DAY = 86400;
     const MAX_TWAR_SNAPSHOTS_LENGTH = 30;
     const BLOCKS_PER_YEAR = 2252857;
 
@@ -39,8 +39,8 @@ describe("Compound Vault", function () {
     };
 
     const assertBigNumberWithinRange = (actualVal: BigNumber, expectedVal: BigNumber) => {
-      const upperBound: BigNumber = expectedVal.add(expectedVal.div(marginOfError));
-      const lowerBound: BigNumber = expectedVal.sub(expectedVal.div(marginOfError));
+      const upperBound: BigNumber = expectedVal.add(expectedVal.div(MARGIN_OF_ERROR));
+      const lowerBound: BigNumber = expectedVal.sub(expectedVal.div(MARGIN_OF_ERROR));
       expect(actualVal).to.be.lte(upperBound);
       expect(actualVal).to.be.gte(lowerBound);
     }
@@ -64,8 +64,8 @@ describe("Compound Vault", function () {
     const simulateAndCalculateTwarMultiplier = (scenarios: Scenario[]): BigNumber => {
       // We assume only one deposit has happened, and thus we start with the dummy snapshot
       let prevSnapshot: TwarSnapshot = {
-        cumulativeRate: BigNumber.from(borrowRatePerBlock * secondsPerDay),
-        timestamp: 0 + secondsPerDay
+        cumulativeRate: BigNumber.from(BORROW_RATE_PER_BLOCK * SECONDS_PER_DAY),
+        timestamp: 0 + SECONDS_PER_DAY
       }
 
       const snapshots: TwarSnapshot[] = [];
@@ -377,33 +377,63 @@ describe("Compound Vault", function () {
       assertBigNumberWithinRange(votingPower, expectedVotingPower);
     });
 
-    it("TWAR Multiplier scales voting power correctly", async () => {
+    it("TWAR Multiplier updates correctly", async () => {
       // Deposit by calling from address 0 and delegating to address 0
-      const tx = await (
+      const firstTx = await (
         await vault.deposit(signers[0].address, one, signers[0].address)
       ).wait();
-      let votingPower = await vault.callStatic.queryVotePowerView(
+      const votingPower = await vault.callStatic.queryVotePowerView(
         signers[0].address,
-        tx.blockNumber
+        firstTx.blockNumber
       );
-      let expectedVotingPower = calcVotePowerFromUnderlying(one);
+      const expectedVotingPower = calcVotePowerFromUnderlying(one);
       assertBigNumberWithinRange(votingPower, expectedVotingPower);
-      const twarMultiplierStorageSlot = calculateStorageSlot("uint256", TWAR_MULTIPLIER);
-      console.log(twarMultiplierStorageSlot);
-      const twarMultiplierValue: string = await network.provider.send("eth_getStorageAt", [vault.address, twarMultiplierStorageSlot, "latest"],);
-      console.log("The multiplier value is: %s", twarMultiplierValue);
-      // It should be 0.9 in the beginning
-      assertBigNumberWithinRange(BigNumber.from(twarMultiplierValue), one.mul(9).div(10));
 
-      // set multiplier to 0.8
-      const newMultiplier = one.mul(8).div(10);
-      await network.provider.send("hardhat_setStorageAt", [vault.address, twarMultiplierStorageSlot, newMultiplier]);
-      votingPower = await vault.callStatic.queryVotePowerView(
-        signers[0].address,
-        tx.blockNumber
-      );
-      expectedVotingPower = calcVotePowerFromUnderlying(one, "0.8");
-      assertBigNumberWithinRange(votingPower, expectedVotingPower);
+      // Let's generate 20 random scenarios
+      const scenarios: Scenario[] = [];
+      // Borrow rate is 0.1 (10%) annually. 
+      const hundredBasisPoints = BigNumber.from(BORROW_RATE_PER_BLOCK).div(10);
+      let currTime = SECONDS_PER_DAY;
+      let timeStampOfPreviousBlockWithTx = (await ethers.provider.getBlock(firstTx.blockNumber)).timestamp;
+
+      for (let i = 0; i < 1; i++) {
+        // Let's set the borrow rate for this scenario from 0.01 - 0.1 
+        // const borrowRate = hundredBasisPoints.mul(Math.floor(Math.random() * 10));
+        const borrowRate = hundredBasisPoints.mul(20);
+        currTime += SECONDS_PER_DAY;
+        const newScenario: Scenario = {
+          borrowRate: borrowRate, 
+          timestamp: currTime
+        }
+        scenarios.push(newScenario);
+
+        // Let's simulate the generated scenarios in our actual vault
+        // First, set the borrow rate
+        cToken.setBorrowRate(newScenario.borrowRate);
+        // Let's warp time ahead
+        await network.provider.send("evm_setNextBlockTimestamp", [timeStampOfPreviousBlockWithTx + SECONDS_PER_DAY]);
+
+        // Deposit of 0, dummy tx to just trigger an update of the TWAR
+        const tx = await (
+          await vault.deposit(signers[0].address, 0, signers[0].address)
+        ).wait();
+        
+        console.log(tx.blockNumber);
+        const lastBlock = await ethers.provider.getBlock(tx.blockNumber);
+        console.log("The time stamp of scenario %d is : %s", i, lastBlock.timestamp - timeStampOfPreviousBlockWithTx);
+        timeStampOfPreviousBlockWithTx = lastBlock.timestamp;
+        // const twoBlocksAgo = await ethers.provider.getBlock(tx.blockNumber - 1);
+        // const lastBlock = await ethers.provider.getBlock(tx.blockNumber);
+        // console.log(twoBlocksAgo.timestamp, lastBlock.timestamp)
+      }
+
+      // Let's see what we expect the multiplier to be now 
+      const expectedTwarMultiplier: BigNumber = simulateAndCalculateTwarMultiplier(scenarios);
+
+      const twarMultiplierStorageSlot = calculateStorageSlot("uint256", TWAR_MULTIPLIER);
+      const twarMultiplierValue: string = await network.provider.send("eth_getStorageAt", [vault.address, twarMultiplierStorageSlot, "latest"],);
+      console.log("The multiplier value we expect is: %s, and what we got is: %s", expectedTwarMultiplier, twarMultiplierValue);
+      assertBigNumberWithinRange(BigNumber.from(twarMultiplierValue), expectedTwarMultiplier);
     });
   });
 });
