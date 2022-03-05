@@ -366,8 +366,7 @@ abstract contract AbstractCompoundVault is IVotingVault {
         }
 
         // The borrow rate is given per block, so let's multiply by blocks per year to get the projected annual borrow rate
-        uint256 weightedAnnualBorrowRate = (newSnapshot.cumulativeRate - subtractSnapshot.cumulativeRate) / (newSnapshot.timestamp - subtractSnapshot.timestamp)
-            * BLOCKS_PER_YEAR;
+        uint256 weightedAnnualBorrowRate = ((newSnapshot.cumulativeRate - subtractSnapshot.cumulativeRate) * (10**18) * BLOCKS_PER_YEAR) / ((newSnapshot.timestamp - subtractSnapshot.timestamp) * (10**18));
 
         // Because of annual borrow rate is an estimate there is a (very unlikely) chance that the first subtraction expression is negative
         // if the borrow rate is extremeley (close to 100%) for a prolonged period of time
