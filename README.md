@@ -1,67 +1,22 @@
-# Council
+# Compound Voting Vaults
+Compound Voting Vault for Element Finance that assigns voting power to cTokens weighted by the Time-weighted Average Borrow Rate (TWAR). 
 
-[![Build Status](https://github.com/element-fi/council/workflows/Tests/badge.svg)](https://github.com/element-fi/council/actions)
-[![Coverage Status](https://coveralls.io/repos/github/element-fi/council/badge.svg?branch=main&t=ry86JL)](https://coveralls.io/github/element-fi/council?branch=main)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/element-fi/council/blob/master/LICENSE)
-  
-Council is a decentralized governance system that allows a community to manage a DAO. The governance system is designed to enable flexibility, improvements, and experimentation while successfully maintaining the security and robustness of the governed protocol.
+## Background
 
-Council is inspired by and extends several forerunners in the DAO governance space including MakerDAO's governance model and the Compound Governor contracts. Like these systems, it is a fully on-chain voting architecture that coordinates the process of making permissioned smart contract calls from privileged addresses. 
+Element Finance recently announced a new [governance framework](https://medium.com/element-finance/an-introduction-to-elements-governance-model-efea13d1c7ee) that aims to provide similar security guarantees of existing frameworks, while allowing for increased flexibility. 
 
-**Council contains several architectural choices which make it a distinct new primitive in the decentralized governance space:**
-- Council does not have a single security threshold to make a call, instead, various actions can be given different security threshold requirements.
-- Council abstracts the vote allocation process for assigning voting power away from the actual voting process meaning that multiple complex vote allocation systems can run in parallel in the contracts. 
-- By default, Council ships with a Governance Steering Council (GSC) enabled which can be assigned different powers than the core voting system. 
-Together, these features allow a wide range of voting processes and security procedures can be seamlessly integrated into one governance system.
+Voting Vaults are one aspect of this new governance design. The current process for on-chain voting usually observes a 1 governance token: 1 vote paradigm. This architecture limits the ability for governance token holders to utilize their tokens as financial assets. Voting Vaults expand upon the existing model, and allow for arbitrary logic to be executed when assigning voting power to users. Examples of voting vaults can be found in [Element's Council github](https://github.com/element-fi/council). This repo contains a Voting Vault that assigns voting power to cTokens (assuming Element's future token were to be listed on Compound). 
 
-## Bug Reporting
+## Vault Details
+This vault serves as a proxy to Compound's system and handles the logic of depositing & withdrawing gov tokens. Most notably, the vault exposes a `queryVotePower` function that the core governance contract will call to determine the voting power a user receives from this vault. Compound is external to the governance system, and thus represents a leakage of governance tokens. Someone could lend out their Element token to receive cElement, and then borrow the Element token from Compound to essentially "double spend" a governance vote. 
 
-For both non-security-critical bugs and security-related critical bugs please follow the rules and instructions highlighted in the Element Finance Bug Bounty program on the [Immunefi platform](https://immunefi.com/bounty/elementfinance/).
+To prevent this, we leverage the borrow utilization rate of cElement to weight the voting power of a cToken appropriately. To mitigate governance attacks that invovle manipulating this borrow rate, we utilize the Time-weighted Average Borrow Rate (TWAR). TWAR operates similarly to [Uniswap's TWAP](https://docs.uniswap.org/protocol/V2/concepts/core-concepts/oracles). Thus, when the borrow rate is high (meaning more Element tokens have been borrowed), cTokens have less voting power (and vice-versa). 
 
-## Contributing to Council
+## Build Repo
+This repo uses Hardhat for both compiling & testing. You can fork the repo and run `npm install` to install all dependencies, and then run `npm run build` and `npm run test`. 
 
-Council is a community-driven governance protocol and there are many ways to contribute to it. We encourage you to jump in and improve and use this code whether that be contributing to Council directly, forking the governance framework for your own use, or just taking bits and pieces from it. We want everyone to build with us!
+## Improvements
+The design space for Voting Vaults is still nascent, and using the TWAR is only way of mitigating governance attacks. There may be a cleaner solution, and indeed other attack vectors that we have not considered here. 
 
-If you have a suggestion for a new feature, extension, or cool use case and want to help the community, drop by the #developers channel in our [discord](https://discord.gg/srgcTGccGe) to discuss and you will have a warm welcome!
-
-When contributing, please be sure to follow our contribution [guidelines](https://github.com/element-fi/elf-contracts/blob/master/CONTRIBUTING.md) when proposing any new code. Lastly, because Council is a community-driven governance protocol, any new code contributions are more likely to be accepted into future deployments of the protocol if they have been openly discussed within the community first.
-
-For a technical overview of Council's smart contracts, please read our documentation [here](https://docs.element.fi/governance-council/council-protocol-smart-contracts).
-
-### Architecture Overview Diagram
-![image](https://user-images.githubusercontent.com/32653033/135169921-9a295182-88fc-4b53-b6c4-3d29cf41f71c.png)
-
-## Build and Testing
-
-### 1. Getting Started (Prerequisites)
-
-- [Install npm](https://nodejs.org/en/download/)
-
-### 2. Setup
-
-```
-git clone git@github.com:element-fi/council.git
-```
-
-```
-cd council
-npm install
-```
-
-### 3. Build
-
-```
-npm run build
-```
-
-### 4. Test
-
-```
-npm run test
-```
-
-## Contributing 
-Council is a community-driven protocol and there are many ways to contribute to it. We encourage anyone to use this as their protocol or DAOs governance system. If you are interested in building on top of it, improving the code, please do! 
-
-## Support 
-If you have any questions, feedback, ideas for improvement, or even further experiments to test out with Council, come join our [#governance](https://discord.gg/z4EsSuaYCd) discord channel to talk more about this!
+## Disclaimer
+When/if appropriate, the changes represented in this repo will be opened as a PR in Element Finance's Council repo, where they will undergo review by Element core team members. The contracts in this repo as they are now should not be deployed to production without more thorough review. 
