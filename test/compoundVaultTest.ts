@@ -39,8 +39,8 @@ describe("Compound Vault", function () {
     };
 
     const assertBigNumberWithinRange = (actualVal: BigNumber, expectedVal: BigNumber, moe = MARGIN_OF_ERROR) => {
-      const upperBound: BigNumber = expectedVal.add(expectedVal.div(MARGIN_OF_ERROR));
-      const lowerBound: BigNumber = expectedVal.sub(expectedVal.div(MARGIN_OF_ERROR));
+      const upperBound: BigNumber = expectedVal.add(expectedVal.div(moe));
+      const lowerBound: BigNumber = expectedVal.sub(expectedVal.div(moe));
       expect(actualVal).to.be.lte(upperBound);
       expect(actualVal).to.be.gte(lowerBound);
     }
@@ -485,7 +485,7 @@ describe("Compound Vault", function () {
       const twarMultiplierStorageSlot = calculateStorageSlot("uint256", TWAR_MULTIPLIER);
       const twarMultiplierValue: string = await network.provider.send("eth_getStorageAt", [vault.address, twarMultiplierStorageSlot, "latest"],);
       // More data points, so JS & Solidity can diverge a bit more 
-      assertBigNumberWithinRange(BigNumber.from(twarMultiplierValue), expectedTwarMultiplier, MARGIN_OF_ERROR / 10);
+      assertBigNumberWithinRange(BigNumber.from(twarMultiplierValue), expectedTwarMultiplier, MARGIN_OF_ERROR / 25);
     });
   });
 });
