@@ -22,7 +22,7 @@ describe("Compound Vault", function () {
     const one = ethers.utils.parseEther("1");
     const zeroAddress = "0x0000000000000000000000000000000000000000";
     // margin of error for checking retur values
-    // set to 0.01% to allow for minor rounding differences
+    // set to 0.1% to allow for minor rounding differences in TWAR Multiplier
     const MARGIN_OF_ERROR = 1000;
     // 1 cToken is worth 0.5 underlying
     const cTokenToUnderlyingRate = 0.5;
@@ -124,7 +124,7 @@ describe("Compound Vault", function () {
             "CompoundVault",
             signers[0]
         );
-        vault = await deployer.deploy(underlying.address, cToken.address, comptroller.address, 86400, 199350, 30);
+        vault = await deployer.deploy(underlying.address, cToken.address, comptroller.address, SECONDS_PER_DAY, 199350, MAX_TWAR_SNAPSHOTS_LENGTH);
 
         // Give users some balance and set their allowance
         for (const signer of signers) {
@@ -396,10 +396,9 @@ describe("Compound Vault", function () {
       let currTime = SECONDS_PER_DAY;
       let timeStampOfPreviousBlockWithTx = (await ethers.provider.getBlock(firstTx.blockNumber)).timestamp;
 
-      for (let i = 0; i < 1; i++) {
+      for (let i = 0; i < MAX_TWAR_SNAPSHOTS_LENGTH - 10; i++) {
         // Let's set the borrow rate for this scenario from 0.01 - 0.1 
-        // const borrowRate = hundredBasisPoints.mul(Math.floor(Math.random() * 10));
-        const borrowRate = hundredBasisPoints.mul(20);
+        const borrowRate = hundredBasisPoints.mul(Math.floor(Math.random() * 10));
         currTime += SECONDS_PER_DAY;
         const newScenario: Scenario = {
           borrowRate: borrowRate, 
@@ -409,7 +408,7 @@ describe("Compound Vault", function () {
 
         // Let's simulate the generated scenarios in our actual vault
         // First, set the borrow rate
-        cToken.setBorrowRate(newScenario.borrowRate);
+        await cToken.setBorrowRate(newScenario.borrowRate);
         // Let's warp time ahead
         await network.provider.send("evm_setNextBlockTimestamp", [timeStampOfPreviousBlockWithTx + SECONDS_PER_DAY]);
 
@@ -418,9 +417,7 @@ describe("Compound Vault", function () {
           await vault.deposit(signers[0].address, 0, signers[0].address)
         ).wait();
         
-        console.log(tx.blockNumber);
         const lastBlock = await ethers.provider.getBlock(tx.blockNumber);
-        console.log("The time stamp of scenario %d is : %s", i, lastBlock.timestamp - timeStampOfPreviousBlockWithTx);
         timeStampOfPreviousBlockWithTx = lastBlock.timestamp;
         // const twoBlocksAgo = await ethers.provider.getBlock(tx.blockNumber - 1);
         // const lastBlock = await ethers.provider.getBlock(tx.blockNumber);
